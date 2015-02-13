@@ -12,6 +12,8 @@ a + b
 ## [1] 5
 ```
 
+New test commit. Had to set up ssh to get push to work from xstudio. I hope it works now.
+
 ## Loading and preprocessing the data
 
 
