@@ -97,10 +97,14 @@ Use dplyr to group by interval
 
 ```{r}
 myDataNONA <- myData[! is.na(myData$steps),]
-daysInterv <- group_by(myDataNONA, myDataNONA$interval)
+daysInterv <- group_by(myDataNONA, factor(myDataNONA$interval))
 stepsInterval <- summarise(daysInterv,test=n(), sum(steps))
-plot(stepsInterval[,1],stepsInterval[,3])
-stepsDay
+head(stepsInterval)
+as.numeric(as.character(stepsInterval[,1]))
+plot(as.numeric(as.character(stepsInterval[,1])),stepsInterval[,3], type = "l")
+paste(as.numeric(as.character(stepsInterval[,1])), as.numeric(as.character(stepsInterval[,3])))
+max(stepsInterval[,3])
+stepsInterval[stepsInterval$"sum(steps)"=="10927",]
 ```
 
 
