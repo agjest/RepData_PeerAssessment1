@@ -111,11 +111,11 @@ days <- group_by(myData, as.character(myData$date))
 stepsDay <- summarise(days,test=n(),sum(steps))
 stepsDay
 head(stepsDay[,3])
-hist(stepsDay[,3],breaks=15)
+#hist(stepsDay[,3],breaks=15)
 #mean number of steps per day
-mean(stepsDay[,3], na.rm=TRUE)
+#mean(stepsDay[,3], na.rm=TRUE)
 #median number of steps per day
-median(stepsDay[,3],na.rm=TRUE)
+#median(stepsDay[,3],na.rm=TRUE)
 ```
 
 
@@ -125,15 +125,15 @@ median(stepsDay[,3],na.rm=TRUE)
 Use dplyr to group by interval
 
 ```{r}
-myDataNONA <- myData[! is.na(myData$steps),]
-daysInterv <- group_by(myDataNONA, factor(myDataNONA$interval))
-stepsInterval <- summarise(daysInterv,test=n(), sum(steps))
-head(stepsInterval)
-as.numeric(as.character(stepsInterval[,1]))
-plot(as.numeric(as.character(stepsInterval[,1])),stepsInterval[,3], type = "l")
-paste(as.numeric(as.character(stepsInterval[,1])), as.numeric(as.character(stepsInterval[,3])))
-max(stepsInterval[,3])
-stepsInterval[stepsInterval$"sum(steps)"=="10927",]
+#myDataNONA <- myData[! is.na(myData$steps),]
+#daysInterv <- group_by(myDataNONA, factor(myDataNONA$interval))
+#stepsInterval <- summarise(daysInterv,test=n(), sum(steps))
+#head(stepsInterval)
+#as.numeric(as.character(stepsInterval[,1]))
+#plot(as.numeric(as.character(stepsInterval[,1])),stepsInterval[,3], type = "l")
+#paste(as.numeric(as.character(stepsInterval[,1])), as.numeric(as.character(stepsInterval[,3])))
+#max(stepsInterval[,3])
+#stepsInterval[stepsInterval$"sum(steps)"=="10927",]
 ```
 
 
