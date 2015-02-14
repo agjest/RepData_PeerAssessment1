@@ -21,8 +21,10 @@ New test commit. Had to set up ssh to get push to work from xstudio. I hope it w
 # In thread http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r
 read.zip.url <- function(url, filename = NULL, FUN = readLines, ...) {
   zipfile <- tempfile()
-  download.file(url = url, destfile = zipfile, quiet = TRUE)
-  zipdir <- tempfile()
+#  download.file(url = url, destfile = zipfile, quiet = TRUE)
+# small hack to support https
+download.file(url = url, destfile = zipfile, quiet = TRUE, method="curl")
+zipdir <- tempfile()
   dir.create(zipdir)
   unzip(zipfile, exdir = zipdir) # files="" so extract all
   files <- list.files(zipdir)
@@ -39,45 +41,72 @@ read.zip.url <- function(url, filename = NULL, FUN = readLines, ...) {
   file <- paste(zipdir, files[1], sep="/")
   do.call(FUN, args = c(list(file.path(zipdir, filename)), list(...)))
 }
-# Looks like we might use dplyr
-library(dplyr)
+# Loads different needed libraries. Strategy is to put the steps into a zoo object. And than use functions from zoo and xts to aggregate on time intervals.
 library(zoo)
+library(xts)
+# loads dplyr also, but perhaps we can make do without this
+library(dplyr)
 ```
 
 
 ## Loading and preprocessing the data
 
-The data for this assigment is provided as a ziped .csv file. To read the data into R we could first unzip the file in a unix terminal and then read the file with the $\texttt{read.csv()}$ function. At the same time it would be nice to have a general solution to read at ziped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey
+The data for this assigment is provided as a ziped .csv file. To read the data into R we could first unzip the file in a unix terminal and then read the file with the $\texttt{read.csv()}$ function. At the same time it would be nice to have a general solution to read at ziped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey. This file ought to be read in from the net and not from local disk, since this is meant to be reproducible reasearch. It was problematic to read in the zipped file from the rdpeng git repository so we insteaded choose to download directly from the source archive at **cloudfront.net** via the **http** protocol.
 
 ```{r}
 #Set wd to local git directory
-setwd('/Users/ag/dev/gitProjects/RepData_PeerAssessment1')
-zipfile <- "activity.zip"
+setwd
+# Problem downloading activity.zip from rdpeng github repository using https
+# Worked round going directly to source via http
+zipUrl <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
 # Use utility function defined above to read in the ziped file
-myData <- read.zip.url(paste("file://", zipfile, sep=""), FUN=read.csv, header=TRUE)
+myData <- read.zip.url(zipUrl, filename="activity.csv",FUN=read.csv, header=TRUE)
 head(myData,n=10)
 #check class
 class(myData)
+names(myData)
 ```
 
-It looks like it might be convenient to have the data as a timeseries object too. Hence we convert the interval variable to a POSIXct object called time. This will be time since midnight. This varible is then paste toghether with the date variable and we obtain a variable dateTime that ought to give a unique point in time. However this does not seems to be the case so there is probably some problem in the dataset. We use the timeDate variable to make a zoo object, but have to exclude duplicate dates.  
+The function **read.csv()** is doing som magic reading in the variables. We start by checking what class they are. 
+
+```{r}
+class(myData$steps)
+class(myData$date)
+class(myData$interval)
+```
+It looks like it might be convenient to have the data as a timeseries object too. Hence we convert the interval variable to a **POSIXct** object called time. This will be time since midnight. This variable is then pasted toghether with the date variable to obtain a variable dateTime that ought to give a unique point in time. We put the **steps** and **dataTime** into a **zoo** object.
 
 ```{r}
 # generate time from interval
-myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
+# pads interval with zeros
+myData$intervalPadded <- formatC(myData$interval, width = 4, format = "d", flag = "0")
+#add 2 zeros at the end for seconds
+myData$intervalPadded <- paste(myData$intervalPadded,"00",sep="")
+head(myData$intervalPadded,300)
+# Nice trix but works with intervals counted from midnight
+#myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
+myData$time <- paste(substr(myData$intervalPadded,1,2),substr(myData$intervalPadded,3,4),substr(myData$intervalPadded,5,6),sep=":")
 head(myData,n=10)
-myData$dateTime <- as.POSIXct(strptime(paste(myData$date,myData$time), "%Y-%m-%d %H:%M:%S"))
+myData$dateTime <- as.POSIXct(strptime(paste(myData$date,myData$time), "%Y-%m-%d %H:%M:%S"), , tz="UCT")
 head(myData,20)
-myDataZoo <- zoo(myData[! duplicated(myData$dateTime),c(1,4)])
-head(myDataZoo,30)
+StepsZoo <- zoo(myData$steps,order.by=myData$dateTime)
+head(StepsZoo)
 ```
 
 
 ## What is mean total number of steps taken per day?
 
-Use dplyr to group the data
+Si
 
 ```{r}
+#nice plot
+plot(StepsZoo)
+#Steps per day
+apply.daily(StepsZoo,sum)
+#plot of steps per day
+plot(apply.daily(StepsZoo,sum))
+
+#using dplyr. Can probably be deleted now that we have a working zoo object
 days <- group_by(myData, as.character(myData$date))
 stepsDay <- summarise(days,test=n(),sum(steps))
 stepsDay
