@@ -43,6 +43,53 @@ zipdir <- tempfile()
   file <- paste(zipdir, files[1], sep="/")
   do.call(FUN, args = c(list(file.path(zipdir, filename)), list(...)))
 }
+
+# Taken from http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+        require(grid)
+        
+        # Make a list from the ... arguments and plotlist
+        plots <- c(list(...), plotlist)
+        
+        numPlots = length(plots)
+        
+        # If layout is NULL, then use 'cols' to determine layout
+        if (is.null(layout)) {
+                # Make the panel
+                # ncol: Number of columns of plots
+                # nrow: Number of rows needed, calculated from # of cols
+                layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                                 ncol = cols, nrow = ceiling(numPlots/cols))
+        }
+        
+        if (numPlots==1) {
+                print(plots[[1]])
+                
+        } else {
+                # Set up the page
+                grid.newpage()
+                pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+                
+                # Make each plot, in the correct location
+                for (i in 1:numPlots) {
+                        # Get the i,j matrix positions of the regions that contain this subplot
+                        matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+                        
+                        print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                                        layout.pos.col = matchidx$col))
+                }
+        }
+}
 # Loads different needed libraries. Strategy is to put the steps into a zoo object. And than use functions from zoo and xts to aggregate on time intervals.
 library(zoo)
 library(xts)
@@ -183,6 +230,7 @@ zooDay <- zoo(tmp$meanSteps, tmp$time)
 autoplot(zooDay) + scale_x_datetime(labels = date_format("%H:%M"))
 # The interval with highest activity
 tmp[tmp$meanSteps==max(tmp$meanSteps),]
+rm(tmp)
 ```
 
 As seen from both the plot and code above the interval that has the most steps on average is from 8:30 to 8:35.
@@ -223,6 +271,147 @@ We start by finding how many complete and incomplete observations we got.
 table(complete.cases(myData[,1:3]))
 ```
 
-As seen from the table we have 2304 incomplete cases and 15264 complete cases. 
+As seen from the table we have 2304 incomplete cases and 15264 complete cases. Our strategy for imputing the missing values is to relpace them with the median number of steps for the respective interval. We start by generating a dataframe of the median number of steps per interval. Then for each missing value we find a matching median value in this dataframe.
+
+```{r}
+# Imputing with median
+tmp <- aggregate(myData$steps, by=list(myData$interval), FUN=median, na.rm=TRUE)
+head(tmp,150)
+names(tmp) <- c('interval','medSteps')
+myData$medSteps <- tmp[match(myData$interval,tmp$interval),"medSteps"] 
+newData <- myData
+newData$imSteps <- ifelse(is.na(newData$steps),newData$medSteps,newData$steps)
+newData <- newData[,c('imSteps','date','interval','dateTime')]
+names(newData) <- c('steps','date','interval','dateTime')
+table(is.na(newData$steps))
+summary(myData[,1:3])
+summary(newData)
+```
+
+
+
+We then turn to calculating mean and median steps per day and making a histogram of daily number of steps. This will be the same analysis as above, but now with the imputed dataset.
+
+```{r}
+# generate time from interval
+# pads interval with zeros
+newData$intervalPadded <- formatC(newData$interval, width = 4, format = "d", flag = "0")
+#add 2 zeros at the end for seconds
+newData$intervalPadded <- paste(newData$intervalPadded,"00",sep="")
+head(newData$intervalPadded)
+# Nice trick gotten from the net, but works with intervals counted from midnight
+#newData$time <- format( as.POSIXct(Sys.Date()) + newData$interval*60, format="%H:%M:%S", tz="UCT")
+# Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
+newData$time <- paste(substr(newData$intervalPadded,1,2),substr(newData$intervalPadded,3,4),substr(newData$intervalPadded,5,6),sep=":")
+head(newData)
+newData$dateTime <- as.POSIXct(strptime(paste(newData$date,newData$time), "%Y-%m-%d %H:%M:%S"), , tz="UCT")
+head(newData)
+StepsZoo <- zoo(newData$steps,order.by=newData$dateTime)
+head(StepsZoo)
+```
+
+```{r results="asis", echo=FALSE}
+#Steps per day, put it in a nice table
+tmp <- as.data.frame(apply.daily(StepsZoo,sum))
+# Want to change the rownames from 2012-10-01 23:55:00 to 2012-10-01 etc
+tmp$date <- substr(rownames(tmp),6,10)
+tmp <- tmp[,c(2,1)]
+names(tmp) <- c("Dates","SumSteps")
+tmp <- data.frame(tmp[1:10,],tmp[11:20,],tmp[21:30,],tmp[31:40,],tmp[41:50,],tmp[51:60,])
+# Tried with xtable but kable seems to do a better job with html
+#print(xtable(tmp), type='html', include.colnames=FALSE, include.rownames=FALSE)
+kable(tmp, format="html", col.names=c(rep(c(" Date", "SumSteps "),6)), align=c(rep('c',12)), 
+      row.names=FALSE,caption="Sum of steps recorded for each date. Starting Oct. 1 and ending Nov. 29. Missing values are imputed with the median for the corresponding interval.")
+rm(tmp)
+```
+
+```{r fig.cap="Plot of the number of steps per day. The missing values are imputed with the median number of steps for corresponding interval."}
+#plot of steps per day
+plot(apply.daily(StepsZoo,sum), xlab="Date",ylab="Number of Steps")
+```
+
+```{r fig.cap="Histogram of the number of steps per day using ggplot2. Missing values are imputed with the median number of steps for the corresponding interval."}
+tmp <- as.data.frame(apply.daily(StepsZoo,sum))
+names(tmp) <- "StepsPerDay"
+ggplot(tmp, aes(x=tmp$StepsPerDay)) + geom_histogram(binwidth=1000, colour="black", fill="white") +
+    geom_vline(aes(xintercept=mean(tmp$StepsPerDay, na.rm=T)) , color="red", linetype="dashed", size=1) + 
+        xlab("Steps per Day")
+rm(tmp)
+```
+
+```{r}
+# fivenum, including  mean and median
+tmp <- as.data.frame(apply.daily(StepsZoo,sum))
+rownames(tmp) <- NULL
+names(tmp) <- "StepsPerDay"
+kable(cbind(t(as.data.frame(fivenum(tmp$StepsPerDay, na.rm=TRUE))),mean(tmp$StepsPerDay, na.rm=TRUE)), col.names=c("minimum", "lower-hinge", "median", "upper-hinge", "maximum", "mean"),row.names=FALSE,caption="Tukey five number summary and sample mean.")
+rm(tmp)
+```
+
+```{r fig.cap="Average steps per 5 minutes interval during the day."}
+tmp <- aggregate(newData$steps, by=list(newData$interval), FUN=mean, na.rm=TRUE)
+names(tmp) <- c("interval", "meanSteps")
+tmp$intervalPadded <- formatC(tmp$interval, width = 4, format = "d", flag = "0")
+#add 2 zeros at the end for seconds
+#newData$intervalPadded <- paste(newData$intervalPadded,"00",sep="")
+head(tmp$intervalPadded)
+# Nice trick gotten from the net, but works with intervals counted from midnight
+#newData$time <- format( as.POSIXct(Sys.Date()) + newData$interval*60, format="%H:%M:%S", tz="UCT")
+# Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
+tmp$t <- paste(substr(tmp$intervalPadded,1,2),substr(tmp$intervalPadded,3,4),sep=":")
+head(tmp)
+tmp$time <- as.POSIXct(strptime(tmp$t, "%H:%M") , tz="UCT")
+head(tmp)
+#format(x_formatted, format = "%H:%M")
+zooDay <- zoo(tmp$meanSteps, tmp$time)
+# Pew, getting rid of the date on the x-axis turned out to be some challenge. Solution: scale package
+autoplot(zooDay) + scale_x_datetime(labels = date_format("%H:%M"))
+# The interval with highest activity
+tmp[tmp$meanSteps==max(tmp$meanSteps),]
+rm(tmp)
+```
+
+
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+To address this question we start by making a factor variable with the two levels "weekday" and "weekend".
+
+```{r}
+newData$wd <- factor(weekdays(as.Date(newData$date)))
+newData$wdf <- factor(ifelse(newData$wd %in% c('Saturday', 'Sunday'), 'weekend', 'weekday'))
+table(newData$wdf)
+# Number of days in each category
+table(newData$wdf)/288
+names(newData)
+```
+
+Again we make a time variable from date and interval and then make a two panel plot
+
+```{r}
+newDataWD <- subset(newData,newData$wdf=='weekday',select=c('steps','interval'))
+newDataWE <- subset(newData,newData$wdf=='weekend',select=c('steps','interval'))
+#should be no NA so na.rm=TRUE
+tmpWD <- aggregate(newDataWD$steps, by=list(newDataWD$interval), FUN=mean)
+tmpWE <- aggregate(newDataWE$steps, by=list(newDataWE$interval), FUN=mean)
+
+names(tmpWD) <- c('interval', 'meanSteps')
+names(tmpWE) <- c('interval', 'meanSteps')
+
+tmpWD$intervalPadded <- formatC(tmpWD$interval, width = 4, format = "d", flag = "0")
+tmpWE$intervalPadded <- formatC(tmpWE$interval, width = 4, format = "d", flag = "0")
+
+tmpWD$t <- paste(substr(tmpWD$intervalPadded,1,2),substr(tmpWD$intervalPadded,3,4),sep=":")
+tmpWE$t <- paste(substr(tmpWE$intervalPadded,1,2),substr(tmpWE$intervalPadded,3,4),sep=":")
+
+tmpWD$time <- as.POSIXct(strptime(tmpWD$t, "%H:%M") , tz="UCT")
+tmpWE$time <- as.POSIXct(strptime(tmpWE$t, "%H:%M") , tz="UCT")
+
+zooWeekday <- zoo(tmpWD$meanSteps, tmpWD$time)
+zooWeekend <- zoo(tmpWE$meanSteps, tmpWE$time)
+
+pwd <- autoplot(zooWeekday) + scale_x_datetime(labels = date_format("%H:%M")) + xlab('Time of day')
+pwe <- autoplot(zooWeekend) + scale_x_datetime(labels = date_format("%H:%M")) + xlab('Time of day')
+multiplot(pwd, pwe, cols=1)
+```
+
