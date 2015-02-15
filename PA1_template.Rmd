@@ -6,17 +6,13 @@ output:
     fig_caption: yes
 ---
 
-Just testing first commit.Do we have latex math $y = \sum_{i=1}^n x^i$, Some R-code 
+## Introduction
 
-```{r}
-a <- 2
-b <- 3
-a + b
-```
+In this short note we will be analysing activity levels during the day. The data we will study is collected from a personal movement activity monitoring device. It consists of number of steps taken during  five minutes periods in the period from 1. October 2012 until 29. November 2012. Unfortunately the dataset contains some missing values. We will start by defining som utility functions and load some libraries that will be needed. After this we continue by reading in the raw data from the net and manipulate it. Our main objective will be to generate a true time variable from the recorded intervals. In the start we will just ignore the missing values. Later on we will impute the missing values by the median number of steps per interval. At the end of the note we will study whether activity levels is different in the weekends.
 
-New test commit. Had to set up ssh to get push to work from xstudio. I hope it works now.
+## Some utility functions and libraries needed
 
-## Some utility functions and library needed
+We start by defining two utilty functions and load som R packages. 
 
 ```{r}
 # Function to read ziped files. Solution due to Jack Wasey at Stackoverflow
@@ -90,21 +86,23 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
                 }
         }
 }
+```
+
+Then we load some packages.
+
+```{r}
 # Loads different needed libraries. Strategy is to put the steps into a zoo object. And than use functions from zoo and xts to aggregate on time intervals.
 library(zoo)
 library(xts)
-library(xtable)
 library(ggplot2)
 library(scales)
 library(knitr)
-# loads dplyr also, but perhaps we can make do without this
-library(dplyr)
 ```
 
 
 ## Loading and preprocessing the data
 
-The data for this assignment is provided as a zipped .csv file. To read the data into R we could first unzip the file in a UNIX terminal and then read the file with the $\texttt{read.csv()}$ function. At the same time it would be nice to have a general solution to read at zipped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey. This file ought to be read in from the net and not from local disk, since this is meant to be reproducible research. It was problematic to read in the zipped file from the rdpeng git repository so we instead choose to download directly from the source archive at **cloudfront.net** via the **http** protocol.
+The data for this assignment is provided as a zipped .csv file. To read the data into R we could first unzip the file in a UNIX terminal and then read the file with the **read.csv()** function, but would be even nicer to have a general solution to read at zipped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey. This file ought to be read in from the net and not from local disk, since this is meant to be reproducible research. It turned out to be problematic to read in the zipped file from the rdpeng git repository so instead we choose to download directly from the source archive at **cloudfront.net** via the **http** protocol.
 
 ```{r}
 #Set wd to local git directory
@@ -132,7 +130,8 @@ class(myData$steps)
 class(myData$date)
 class(myData$interval)
 ```
-It looks like it might be convenient to have the data as a time series object too. Hence we convert the interval variable to a **POSIXct** object called time. This will be time since midnight. This variable is then pasted together with the date variable to obtain a variable dateTime that ought to give a unique point in time. We put the **steps** and **dataTime** into a **zoo** object.
+
+It looks like it might be convenient to have the data as a time series object. Hence we convert the interval variable to a **POSIXct** object called time. This will be time since midnight. This variable is then pasted together with the date variable to obtain a variable dateTime that ought to give a unique point in time. We put the **steps** and **dataTime** variables into a **zoo** object.
 
 ```{r}
 # generate time from interval
@@ -140,23 +139,16 @@ It looks like it might be convenient to have the data as a time series object to
 myData$intervalPadded <- formatC(myData$interval, width = 4, format = "d", flag = "0")
 #add 2 zeros at the end for seconds
 myData$intervalPadded <- paste(myData$intervalPadded,"00",sep="")
-head(myData$intervalPadded)
-# Nice trick gotten from the net, but works with intervals counted from midnight
-#myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
 # Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
 myData$time <- paste(substr(myData$intervalPadded,1,2),substr(myData$intervalPadded,3,4),substr(myData$intervalPadded,5,6),sep=":")
-head(myData)
 myData$dateTime <- as.POSIXct(strptime(paste(myData$date,myData$time), "%Y-%m-%d %H:%M:%S"), , tz="UCT")
-head(myData)
 StepsZoo <- zoo(myData$steps,order.by=myData$dateTime)
-head(StepsZoo)
 ```
 
 
 ## What is mean total number of steps taken per day?
 
 The number of steps is now put into a zoo object. We can now use functions from the **xts** package to aggregate for different time intervals. It is also easy to make plots of the time series.
-
 
 ```{r fig.cap="Simple plot of the time serie using ggplot2 via autoplot."}
 # Starts with a rough plot of the timeseries
@@ -180,12 +172,17 @@ kable(tmp, format="html", col.names=c(rep(c(" Date", "SumSteps "),6)), align=c(r
 rm(tmp)
 ```
 
-```{r fig.cap="Plot of the number of steps per day. Binwidth is 1000 and missing values are ignored. The dotted line is the sample mean."}
+It is also of interest to see how number of steps per day vary over time. Missing data is just ignored.
+
+
+```{r fig.cap="Plot of the number of steps per day."}
 #plot of steps per day
 plot(apply.daily(StepsZoo,sum), xlab="Date",ylab="Number of Steps")
 ```
 
-```{r fig.cap="Histogram of the number of steps per day using ggplot2. Missing values are ignored."}
+Next we study the distribution of steps per day using a histogram. 
+
+```{r fig.cap="Histogram of the number of steps per day using ggplot2. Missing values are ignored. The mean is indicated by a dashed line."}
 tmp <- as.data.frame(apply.daily(StepsZoo,sum))
 names(tmp) <- "StepsPerDay"
 ggplot(tmp, aes(x=tmp$StepsPerDay)) + geom_histogram(binwidth=1000, colour="black", fill="white") +
@@ -208,7 +205,7 @@ rm(tmp)
 
 ## What is the average daily activity pattern?
 
-To find the average daily activity pattern we have to aggregate over the 5 minute intervals across days. This should be possible to accomplish by manipulating the zoo object, but we choose to do with the help of the **aggregate()** function from the **stats** package. We the manipulate the interval variable in the same way as above to generate a time variable. This is then put into a new zoo object that contains the averages for each 5 minutes interval during the day. This object is then ploted and we also find the interval with the largest activity measured by number of steps.
+To find the average daily activity pattern we have to aggregate over the 5 minute intervals across days. This should be possible to accomplish by manipulating the zoo object, but we choose to do it with the help of the **aggregate()** function from the **stats** package. We the manipulate the interval variable in the same way as above to generate a time variable. This is then put into a new zoo object that contains the averages for each 5 minutes interval during the day. This object is then plotted and we also find the interval with the largest activity measured by number of steps.
 
 ```{r fig.cap="Average steps per 5 minutes interval during the day."}
 tmp <- aggregate(myData$steps, by=list(myData$interval), FUN=mean, na.rm=TRUE)
@@ -216,14 +213,10 @@ names(tmp) <- c("interval", "meanSteps")
 tmp$intervalPadded <- formatC(tmp$interval, width = 4, format = "d", flag = "0")
 #add 2 zeros at the end for seconds
 #myData$intervalPadded <- paste(myData$intervalPadded,"00",sep="")
-head(tmp$intervalPadded)
-# Nice trick gotten from the net, but works with intervals counted from midnight
-#myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
+#head(tmp$intervalPadded)
 # Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
 tmp$t <- paste(substr(tmp$intervalPadded,1,2),substr(tmp$intervalPadded,3,4),sep=":")
-head(tmp)
 tmp$time <- as.POSIXct(strptime(tmp$t, "%H:%M") , tz="UCT")
-head(tmp)
 #format(x_formatted, format = "%H:%M")
 zooDay <- zoo(tmp$meanSteps, tmp$time)
 # Pew, getting rid of the date on the x-axis turned out to be some challenge. Solution: scale package
@@ -234,34 +227,6 @@ rm(tmp)
 ```
 
 As seen from both the plot and code above the interval that has the most steps on average is from 8:30 to 8:35.
-
-
-
-We start by using dplyr to group by interval.
-
-```{r}
-# Using dplyr.
-days <- group_by(myData, as.character(myData$date))
-stepsDay <- summarise(days,test=n(),sum(steps))
-stepsDay
-head(stepsDay[,3])
-#hist(stepsDay[,3],breaks=15)
-#mean number of steps per day
-#mean(stepsDay[,3], na.rm=TRUE)
-#median number of steps per day
-#median(stepsDay[,3],na.rm=TRUE)
-#myDataNONA <- myData[! is.na(myData$steps),]
-#daysInterv <- group_by(myDataNONA, factor(myDataNONA$interval))
-#stepsInterval <- summarise(daysInterv,test=n(), sum(steps))
-#head(stepsInterval)
-#as.numeric(as.character(stepsInterval[,1]))
-#plot(as.numeric(as.character(stepsInterval[,1])),stepsInterval[,3], type = "l")
-#paste(as.numeric(as.character(stepsInterval[,1])), as.numeric(as.character(stepsInterval[,3])))
-#max(stepsInterval[,3])
-#stepsInterval[stepsInterval$"sum(steps)"=="10927",]
-```
-
-
 
 ## Imputing missing values
 
@@ -276,7 +241,6 @@ As seen from the table we have 2304 incomplete cases and 15264 complete cases. O
 ```{r}
 # Imputing with median
 tmp <- aggregate(myData$steps, by=list(myData$interval), FUN=median, na.rm=TRUE)
-head(tmp,150)
 names(tmp) <- c('interval','medSteps')
 myData$medSteps <- tmp[match(myData$interval,tmp$interval),"medSteps"] 
 newData <- myData
@@ -285,10 +249,10 @@ newData <- newData[,c('imSteps','date','interval','dateTime')]
 names(newData) <- c('steps','date','interval','dateTime')
 table(is.na(newData$steps))
 summary(myData[,1:3])
-summary(newData)
+summary(newData[,1.3])
 ```
 
-
+As we see from the summaries above the mean number of steps declines when we impute the missing values with the median.
 
 We then turn to calculating mean and median steps per day and making a histogram of daily number of steps. This will be the same analysis as above, but now with the imputed dataset.
 
@@ -298,17 +262,13 @@ We then turn to calculating mean and median steps per day and making a histogram
 newData$intervalPadded <- formatC(newData$interval, width = 4, format = "d", flag = "0")
 #add 2 zeros at the end for seconds
 newData$intervalPadded <- paste(newData$intervalPadded,"00",sep="")
-head(newData$intervalPadded)
-# Nice trick gotten from the net, but works with intervals counted from midnight
-#newData$time <- format( as.POSIXct(Sys.Date()) + newData$interval*60, format="%H:%M:%S", tz="UCT")
 # Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
 newData$time <- paste(substr(newData$intervalPadded,1,2),substr(newData$intervalPadded,3,4),substr(newData$intervalPadded,5,6),sep=":")
-head(newData)
 newData$dateTime <- as.POSIXct(strptime(paste(newData$date,newData$time), "%Y-%m-%d %H:%M:%S"), , tz="UCT")
-head(newData)
 StepsZoo <- zoo(newData$steps,order.by=newData$dateTime)
-head(StepsZoo)
 ```
+
+We the report the number of steps per day in a table.
 
 ```{r results="asis", echo=FALSE}
 #Steps per day, put it in a nice table
@@ -325,10 +285,14 @@ kable(tmp, format="html", col.names=c(rep(c(" Date", "SumSteps "),6)), align=c(r
 rm(tmp)
 ```
 
+The following figure shows how steps per day varies over time.
+
 ```{r fig.cap="Plot of the number of steps per day. The missing values are imputed with the median number of steps for corresponding interval."}
 #plot of steps per day
 plot(apply.daily(StepsZoo,sum), xlab="Date",ylab="Number of Steps")
 ```
+
+The distribution of steps per day after the missing data is imputed with the median value is illustrated with a histogram below.
 
 ```{r fig.cap="Histogram of the number of steps per day using ggplot2. Missing values are imputed with the median number of steps for the corresponding interval."}
 tmp <- as.data.frame(apply.daily(StepsZoo,sum))
@@ -339,6 +303,8 @@ ggplot(tmp, aes(x=tmp$StepsPerDay)) + geom_histogram(binwidth=1000, colour="blac
 rm(tmp)
 ```
 
+The mean and median steps per day after imputing. We are combining this with Tukey's five numbers. 
+
 ```{r}
 # fivenum, including  mean and median
 tmp <- as.data.frame(apply.daily(StepsZoo,sum))
@@ -348,20 +314,15 @@ kable(cbind(t(as.data.frame(fivenum(tmp$StepsPerDay, na.rm=TRUE))),mean(tmp$Step
 rm(tmp)
 ```
 
+And finally we end this section with a plot of the avarage number of step per five minutes period during the day.
+
 ```{r fig.cap="Average steps per 5 minutes interval during the day."}
 tmp <- aggregate(newData$steps, by=list(newData$interval), FUN=mean, na.rm=TRUE)
 names(tmp) <- c("interval", "meanSteps")
 tmp$intervalPadded <- formatC(tmp$interval, width = 4, format = "d", flag = "0")
-#add 2 zeros at the end for seconds
-#newData$intervalPadded <- paste(newData$intervalPadded,"00",sep="")
-head(tmp$intervalPadded)
-# Nice trick gotten from the net, but works with intervals counted from midnight
-#newData$time <- format( as.POSIXct(Sys.Date()) + newData$interval*60, format="%H:%M:%S", tz="UCT")
 # Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
 tmp$t <- paste(substr(tmp$intervalPadded,1,2),substr(tmp$intervalPadded,3,4),sep=":")
-head(tmp)
 tmp$time <- as.POSIXct(strptime(tmp$t, "%H:%M") , tz="UCT")
-head(tmp)
 #format(x_formatted, format = "%H:%M")
 zooDay <- zoo(tmp$meanSteps, tmp$time)
 # Pew, getting rid of the date on the x-axis turned out to be some challenge. Solution: scale package
@@ -370,8 +331,6 @@ autoplot(zooDay) + scale_x_datetime(labels = date_format("%H:%M"))
 tmp[tmp$meanSteps==max(tmp$meanSteps),]
 rm(tmp)
 ```
-
-
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
@@ -386,7 +345,7 @@ table(newData$wdf)/288
 names(newData)
 ```
 
-Again we make a time variable from date and interval and then make a two panel plot
+We use this factor variable to split the dataset and again we make a time variable from date and interval. Then we make a two panel plot with the help of **ggplot()** function and the **multiplot** utility function defined in the start of this note.
 
 ```{r}
 newDataWD <- subset(newData,newData$wdf=='weekday',select=c('steps','interval'))
@@ -394,24 +353,30 @@ newDataWE <- subset(newData,newData$wdf=='weekend',select=c('steps','interval'))
 #should be no NA so na.rm=TRUE
 tmpWD <- aggregate(newDataWD$steps, by=list(newDataWD$interval), FUN=mean)
 tmpWE <- aggregate(newDataWE$steps, by=list(newDataWE$interval), FUN=mean)
-
+#put on names
 names(tmpWD) <- c('interval', 'meanSteps')
 names(tmpWE) <- c('interval', 'meanSteps')
-
+#pad the iterval with leading zeros
 tmpWD$intervalPadded <- formatC(tmpWD$interval, width = 4, format = "d", flag = "0")
 tmpWE$intervalPadded <- formatC(tmpWE$interval, width = 4, format = "d", flag = "0")
-
+#make a tmp variable where hour and minutes are seperated by :
 tmpWD$t <- paste(substr(tmpWD$intervalPadded,1,2),substr(tmpWD$intervalPadded,3,4),sep=":")
 tmpWE$t <- paste(substr(tmpWE$intervalPadded,1,2),substr(tmpWE$intervalPadded,3,4),sep=":")
-
+# convert to a POSIXct object
 tmpWD$time <- as.POSIXct(strptime(tmpWD$t, "%H:%M") , tz="UCT")
 tmpWE$time <- as.POSIXct(strptime(tmpWE$t, "%H:%M") , tz="UCT")
-
+# make zoo object
 zooWeekday <- zoo(tmpWD$meanSteps, tmpWD$time)
 zooWeekend <- zoo(tmpWE$meanSteps, tmpWE$time)
-
+# plot with ggplot through autoplot
 pwd <- autoplot(zooWeekday) + scale_x_datetime(labels = date_format("%H:%M")) + xlab('Time of day')
 pwe <- autoplot(zooWeekend) + scale_x_datetime(labels = date_format("%H:%M")) + xlab('Time of day')
+# two panel plot with multiplot. Note time on the axis
 multiplot(pwd, pwe, cols=1)
 ```
 
+As will be seen from the figure above there seems to be some difference in activity level between weekdays and weekends. There is a greater level of activity during early moring in the weekdays and also a greater peak around 8:30 which is the time of day with the highest level of activity. In addition there seems to be a higher level of activity late in the evening about 20:00 to 22:00 in the weekends.
+
+## Conclusions
+
+As shown in this note this dataset indicates that activity levels varies during the day with a pronounced peak about 8:30 in the morning. In addition there seems to be some difference in activity level between workdays and weekends.
