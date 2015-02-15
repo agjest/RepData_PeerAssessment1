@@ -105,7 +105,7 @@ library(knitr)
 The data for this assignment is provided as a zipped .csv file. To read the data into R we could first unzip the file in a UNIX terminal and then read the file with the **read.csv()** function, but would be even nicer to have a general solution to read at zipped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey. This file ought to be read in from the net and not from local disk, since this is meant to be reproducible research. It turned out to be problematic to read in the zipped file from the rdpeng git repository so instead we choose to download directly from the source archive at **cloudfront.net** via the **http** protocol.
 
 ```{r}
-#Set wd to local git directory
+#Set wd to local git directory  
 #setwd('mywd')
 # Problem downloading activity.zip from rdpeng github repository using https
 # Worked round going directly to source via http
