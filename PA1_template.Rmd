@@ -3,7 +3,9 @@ title: "Reproducible Research: Peer Assessment 1"
 output: 
   html_document:
     keep_md: true
+    fig_caption: yes
 ---
+
 Just testing first commit.Do we have latex math $y = \sum_{i=1}^n x^i$, Some R-code 
 
 ```{r}
@@ -44,6 +46,9 @@ zipdir <- tempfile()
 # Loads different needed libraries. Strategy is to put the steps into a zoo object. And than use functions from zoo and xts to aggregate on time intervals.
 library(zoo)
 library(xts)
+library(xtable)
+library(ggplot2)
+library(knitr)
 # loads dplyr also, but perhaps we can make do without this
 library(dplyr)
 ```
@@ -55,13 +60,18 @@ The data for this assigment is provided as a ziped .csv file. To read the data i
 
 ```{r}
 #Set wd to local git directory
-setwd
+setwd('/Users/ag/dev/git/RepData_PeerAssessment1')
 # Problem downloading activity.zip from rdpeng github repository using https
 # Worked round going directly to source via http
-zipUrl <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+#zipUrl <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
 # Use utility function defined above to read in the ziped file
-myData <- read.zip.url(zipUrl, filename="activity.csv",FUN=read.csv, header=TRUE)
-head(myData,n=10)
+#myData <- read.zip.url(zipUrl, filename="activity.csv",FUN=read.csv, header=TRUE)
+#head(myData,n=10)
+#save(myData,file="myData.RData")
+# Save myData to local working directory and then load it. 
+# Comment out the functions above when working but uncomment before final commit so that reproducable
+# Seems a waste of bandwidth to load the dataset from the net every time we do Knit HTML
+load("myData.RData")
 #check class
 class(myData)
 names(myData)
@@ -82,13 +92,13 @@ It looks like it might be convenient to have the data as a timeseries object too
 myData$intervalPadded <- formatC(myData$interval, width = 4, format = "d", flag = "0")
 #add 2 zeros at the end for seconds
 myData$intervalPadded <- paste(myData$intervalPadded,"00",sep="")
-head(myData$intervalPadded,300)
+head(myData$intervalPadded)
 # Nice trix but works with intervals counted from midnight
 #myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
 myData$time <- paste(substr(myData$intervalPadded,1,2),substr(myData$intervalPadded,3,4),substr(myData$intervalPadded,5,6),sep=":")
-head(myData,n=10)
+head(myData)
 myData$dateTime <- as.POSIXct(strptime(paste(myData$date,myData$time), "%Y-%m-%d %H:%M:%S"), , tz="UCT")
-head(myData,20)
+head(myData)
 StepsZoo <- zoo(myData$steps,order.by=myData$dateTime)
 head(StepsZoo)
 ```
@@ -96,16 +106,61 @@ head(StepsZoo)
 
 ## What is mean total number of steps taken per day?
 
-Si
+The number of steps is now put into a zoo object. We can now use functions from the xts package to aggregate for different time intervals. It is also easy to make plots of the time serie.
+
+
+```{r fig.cap="Simple plot of the time serie using ggplot2 via autoplot."}
+# Starts with a rough plot of the timeseries
+autoplot(StepsZoo)
+```
+
+Since the data now is a zoo object we can use the **apply.daily()** function from the **xts** package to calculate the total number of steps per day. The results are reported in the table below.
+
+```{r results="asis", echo=FALSE}
+#Steps per day, put it in a nice table
+tmp <- as.data.frame(apply.daily(StepsZoo,sum))
+# Want to change the rownames from 2012-10-01 23:55:00 to 2012-10-01 etc
+tmp$date <- substr(rownames(tmp),6,10)
+tmp <- tmp[,c(2,1)]
+names(tmp) <- c("Dates","SumSteps")
+tmp <- data.frame(tmp[1:10,],tmp[11:20,],tmp[21:30,],tmp[31:40,],tmp[41:50,],tmp[51:60,])
+# Tried with xtable but kable seems to do a better job with html
+#print(xtable(tmp), type='html', include.colnames=FALSE, include.rownames=FALSE)
+kable(tmp, format="html", col.names=c(rep(c(" Date", "SumSteps "),6)), align=c(rep('c',12)), 
+      row.names=FALSE,caption="Sum of steps recorded for each date. Starting Oct. 1 and ending Nov. 29.")
+rm(tmp)
+```
+
+```{r fig.cap="Plot of the number of steps per day. Binwidth is 1000 and missing values are ignored. The dotted line is the sample mean."}
+#plot of steps per day
+plot(apply.daily(StepsZoo,sum), xlab="Date",ylab="Number of Steps")
+```
+
+```{r fig.cap="Histogram of the number of steps per day using ggplot2. Missing values are ignored."}
+tmp <- as.data.frame(apply.daily(StepsZoo,sum))
+names(tmp) <- "StepsPerDay"
+ggplot(tmp, aes(x=tmp$StepsPerDay)) + geom_histogram(binwidth=1000, colour="black", fill="white") +
+    geom_vline(aes(xintercept=mean(tmp$StepsPerDay, na.rm=T)) , color="red", linetype="dashed", size=1) + 
+        xlab("Steps per Day")
+rm(tmp)
+```
+
+Finally we report the mean and median of steps taken per day. Again we use the **apply.daily()** aggregation function from the **xts** package. The **median** is included in Tukey's five number summary so we use the **fivenum** function from the **stats** package. In addition we need the **mean** 
 
 ```{r}
-#nice plot
-plot(StepsZoo)
-#Steps per day
-apply.daily(StepsZoo,sum)
-#plot of steps per day
-plot(apply.daily(StepsZoo,sum))
+# Ignore missing values
+# fivenum, including  mean and median
+tmp <- as.data.frame(apply.daily(StepsZoo,sum))
+rownames(tmp) <- NULL
+names(tmp) <- "StepsPerDay"
+kable(cbind(t(as.data.frame(fivenum(tmp$StepsPerDay, na.rm=TRUE))),mean(tmp$StepsPerDay, na.rm=TRUE)), col.names=c("minimum", "lower-hinge", "median", "upper-hinge", "maximum", "mean"),row.names=FALSE,caption="Tukey five number summary and sample mean.")
+```
 
+## What is the average daily activity pattern?
+
+Use dplyr to group by interval
+
+```{r}
 #using dplyr. Can probably be deleted now that we have a working zoo object
 days <- group_by(myData, as.character(myData$date))
 stepsDay <- summarise(days,test=n(),sum(steps))
@@ -116,15 +171,6 @@ head(stepsDay[,3])
 #mean(stepsDay[,3], na.rm=TRUE)
 #median number of steps per day
 #median(stepsDay[,3],na.rm=TRUE)
-```
-
-
-
-## What is the average daily activity pattern?
-
-Use dplyr to group by interval
-
-```{r}
 #myDataNONA <- myData[! is.na(myData$steps),]
 #daysInterv <- group_by(myDataNONA, factor(myDataNONA$interval))
 #stepsInterval <- summarise(daysInterv,test=n(), sum(steps))
