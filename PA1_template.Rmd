@@ -48,6 +48,7 @@ library(zoo)
 library(xts)
 library(xtable)
 library(ggplot2)
+library(scales)
 library(knitr)
 # loads dplyr also, but perhaps we can make do without this
 library(dplyr)
@@ -56,7 +57,7 @@ library(dplyr)
 
 ## Loading and preprocessing the data
 
-The data for this assigment is provided as a ziped .csv file. To read the data into R we could first unzip the file in a unix terminal and then read the file with the $\texttt{read.csv()}$ function. At the same time it would be nice to have a general solution to read at ziped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey. This file ought to be read in from the net and not from local disk, since this is meant to be reproducible reasearch. It was problematic to read in the zipped file from the rdpeng git repository so we insteaded choose to download directly from the source archive at **cloudfront.net** via the **http** protocol.
+The data for this assignment is provided as a zipped .csv file. To read the data into R we could first unzip the file in a UNIX terminal and then read the file with the $\texttt{read.csv()}$ function. At the same time it would be nice to have a general solution to read at zipped file directly into R. A quick search turned up the following solution on Stackoverflow (http://stackoverflow.com/questions/8986818/automate-zip-file-reading-in-r) due to Jack Wasey. This file ought to be read in from the net and not from local disk, since this is meant to be reproducible research. It was problematic to read in the zipped file from the rdpeng git repository so we instead choose to download directly from the source archive at **cloudfront.net** via the **http** protocol.
 
 ```{r}
 #Set wd to local git directory
@@ -77,14 +78,14 @@ class(myData)
 names(myData)
 ```
 
-The function **read.csv()** is doing som magic reading in the variables. We start by checking what class they are. 
+The function **read.csv()** is doing some magic reading in the variables. We start by checking what class they are. 
 
 ```{r}
 class(myData$steps)
 class(myData$date)
 class(myData$interval)
 ```
-It looks like it might be convenient to have the data as a timeseries object too. Hence we convert the interval variable to a **POSIXct** object called time. This will be time since midnight. This variable is then pasted toghether with the date variable to obtain a variable dateTime that ought to give a unique point in time. We put the **steps** and **dataTime** into a **zoo** object.
+It looks like it might be convenient to have the data as a time series object too. Hence we convert the interval variable to a **POSIXct** object called time. This will be time since midnight. This variable is then pasted together with the date variable to obtain a variable dateTime that ought to give a unique point in time. We put the **steps** and **dataTime** into a **zoo** object.
 
 ```{r}
 # generate time from interval
@@ -93,8 +94,9 @@ myData$intervalPadded <- formatC(myData$interval, width = 4, format = "d", flag 
 #add 2 zeros at the end for seconds
 myData$intervalPadded <- paste(myData$intervalPadded,"00",sep="")
 head(myData$intervalPadded)
-# Nice trix but works with intervals counted from midnight
+# Nice trick gotten from the net, but works with intervals counted from midnight
 #myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
+# Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
 myData$time <- paste(substr(myData$intervalPadded,1,2),substr(myData$intervalPadded,3,4),substr(myData$intervalPadded,5,6),sep=":")
 head(myData)
 myData$dateTime <- as.POSIXct(strptime(paste(myData$date,myData$time), "%Y-%m-%d %H:%M:%S"), , tz="UCT")
@@ -106,7 +108,7 @@ head(StepsZoo)
 
 ## What is mean total number of steps taken per day?
 
-The number of steps is now put into a zoo object. We can now use functions from the xts package to aggregate for different time intervals. It is also easy to make plots of the time serie.
+The number of steps is now put into a zoo object. We can now use functions from the **xts** package to aggregate for different time intervals. It is also easy to make plots of the time series.
 
 
 ```{r fig.cap="Simple plot of the time serie using ggplot2 via autoplot."}
@@ -154,14 +156,43 @@ tmp <- as.data.frame(apply.daily(StepsZoo,sum))
 rownames(tmp) <- NULL
 names(tmp) <- "StepsPerDay"
 kable(cbind(t(as.data.frame(fivenum(tmp$StepsPerDay, na.rm=TRUE))),mean(tmp$StepsPerDay, na.rm=TRUE)), col.names=c("minimum", "lower-hinge", "median", "upper-hinge", "maximum", "mean"),row.names=FALSE,caption="Tukey five number summary and sample mean.")
+rm(tmp)
 ```
 
 ## What is the average daily activity pattern?
 
-Use dplyr to group by interval
+To find the average daily activity pattern we have to aggregate over the 5 minute intervals across days. This should be possible to accomplish by manipulating the zoo object, but we choose to do with the help of the **aggregate()** function from the **stats** package. We the manipulate the interval variable in the same way as above to generate a time variable. This is then put into a new zoo object that contains the averages for each 5 minutes interval during the day. This object is then ploted and we also find the interval with the largest activity measured by number of steps.
+
+```{r fig.cap="Average steps per 5 minutes interval during the day."}
+tmp <- aggregate(myData$steps, by=list(myData$interval), FUN=mean, na.rm=TRUE)
+names(tmp) <- c("interval", "meanSteps")
+tmp$intervalPadded <- formatC(tmp$interval, width = 4, format = "d", flag = "0")
+#add 2 zeros at the end for seconds
+#myData$intervalPadded <- paste(myData$intervalPadded,"00",sep="")
+head(tmp$intervalPadded)
+# Nice trick gotten from the net, but works with intervals counted from midnight
+#myData$time <- format( as.POSIXct(Sys.Date()) + myData$interval*60, format="%H:%M:%S", tz="UCT")
+# Our intervals are a kind of time. Mend them so that we can convert to POSIXct and later a zoo object
+tmp$t <- paste(substr(tmp$intervalPadded,1,2),substr(tmp$intervalPadded,3,4),sep=":")
+head(tmp)
+tmp$time <- as.POSIXct(strptime(tmp$t, "%H:%M") , tz="UCT")
+head(tmp)
+#format(x_formatted, format = "%H:%M")
+zooDay <- zoo(tmp$meanSteps, tmp$time)
+# Pew, getting rid of the date on the x-axis turned out to be some challenge. Solution: scale package
+autoplot(zooDay) + scale_x_datetime(labels = date_format("%H:%M"))
+# The interval with highest activity
+tmp[tmp$meanSteps==max(tmp$meanSteps),]
+```
+
+As seen from both the plot and code above the interval that has the most steps on average is from 8:30 to 8:35.
+
+
+
+We start by using dplyr to group by interval.
 
 ```{r}
-#using dplyr. Can probably be deleted now that we have a working zoo object
+# Using dplyr.
 days <- group_by(myData, as.character(myData$date))
 stepsDay <- summarise(days,test=n(),sum(steps))
 stepsDay
@@ -186,6 +217,12 @@ head(stepsDay[,3])
 
 ## Imputing missing values
 
+We start by finding how many complete and incomplete observations we got.
 
+```{r}
+table(complete.cases(myData[,1:3]))
+```
+
+As seen from the table we have 2304 incomplete cases and 15264 complete cases. 
 
 ## Are there differences in activity patterns between weekdays and weekends?
