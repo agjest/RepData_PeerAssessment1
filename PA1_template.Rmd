@@ -106,18 +106,20 @@ The data for this assignment is provided as a zipped .csv file. To read the data
 
 ```{r}
 #Set wd to local git directory
-setwd('/Users/ag/dev/git/RepData_PeerAssessment1')
+#setwd('mywd')
 # Problem downloading activity.zip from rdpeng github repository using https
 # Worked round going directly to source via http
-#zipUrl <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+zipUrl <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
 # Use utility function defined above to read in the ziped file
-#myData <- read.zip.url(zipUrl, filename="activity.csv",FUN=read.csv, header=TRUE)
+myData <- read.zip.url(zipUrl, filename="activity.csv",FUN=read.csv, header=TRUE)
 #head(myData,n=10)
+# uncomment next line to save data to local working directory
 #save(myData,file="myData.RData")
 # Save myData to local working directory and then load it. 
 # Comment out the functions above when working but uncomment before final commit so that reproducable
 # Seems a waste of bandwidth to load the dataset from the net every time we do Knit HTML
-load("myData.RData")
+# Uncomment next line to load data from local working directory
+#load("myData.RData")
 #check class
 class(myData)
 names(myData)
